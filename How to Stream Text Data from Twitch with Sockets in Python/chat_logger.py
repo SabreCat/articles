@@ -1,10 +1,11 @@
 import socket
 import logging
 from emoji import demojize
+from multiprocessing import Process
+from string import Template
 
 logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s — %(message)s',
-                    datefmt='%Y-%m-%d_%H:%M:%S',
+                    format='%(message)s',
                     handlers=[logging.FileHandler('chat.log', encoding='utf-8')])
 
 
@@ -16,10 +17,10 @@ server = 'irc.chat.twitch.tv'
 port = 6667
 nickname = '<YOUR_USERNAME>'
 token = '<YOUR_TOKEN>'
-channel = '<CHANNEL>'
+channels = ['#channel1','#channel2']
 
 
-def main():
+def main(channel='#commanderroot'):
     sock = socket.socket()
     sock.connect((server, port))
     sock.send(f"PASS {token}\r\n".encode('utf-8'))
@@ -34,11 +35,23 @@ def main():
                 # sock.send("PONG :tmi.twitch.tv\n".encode('utf-8'))
                 sock.send("PONG\n".encode('utf-8'))
             elif len(resp) > 0:
-                logging.info(demojize(resp))
+                if resp.find('PRIVMSG') != -1 and not(resp.startswith(':streamelements')) and not(resp.startswith(':nightbot')) and not(resp.startswith(':streamlabs')):
+                    chattername = resp[1:resp.find('!')]
+                    chattext = demojize(resp[resp.find(':', 1) + 1:resp.find('\n')])
+                    output = Template('$who in $where: $what').substitute(where=channel, who=chattername, what=chattext)
+                    logging.info(output)
 
     except KeyboardInterrupt:
         sock.close()
-        exit()
 
 if __name__ == '__main__':
-    main()
+    processes = []
+    for irc in channels:
+        proc = Process(target=main, args=(irc,))
+        processes.append(proc)
+        proc.start()
+
+    for proc in processes:
+        proc.join()
+
+    exit()
